@@ -2,6 +2,9 @@ name = "wxmini"
 compatibility_date = "2024-06-01"
 pages_build_output_dir = "."
 
+[vars]
+WX_APP_ID = "wxdc70a51cfcca8352"
+
 [[kv_namespaces]]
 binding = "WXMINI"
 id = "54f58d0691504c8b99d0097a33e577ea"
