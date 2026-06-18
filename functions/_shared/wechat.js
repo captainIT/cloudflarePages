@@ -4,8 +4,12 @@ export async function codeToOpenid(env, code) {
   const appId = env.WX_APP_ID;
   const appSecret = env.WX_APP_SECRET;
 
-  if (!appId || !appSecret) {
-    throw new Error('WeChat app credentials are not configured');
+  if (!appId) {
+    throw new Error('WX_APP_ID is not configured');
+  }
+
+  if (!appSecret) {
+    throw new Error('WX_APP_SECRET is not configured');
   }
 
   const url = new URL(JSCODE2SESSION_URL);

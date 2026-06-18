@@ -2,8 +2,17 @@ name = "wxmini"
 compatibility_date = "2024-06-01"
 pages_build_output_dir = "."
 
+# Plain text vars (also set WX_APP_ID in Pages dashboard if needed)
 [vars]
 WX_APP_ID = "wxdc70a51cfcca8352"
+
+# Secret must be configured separately (never commit to git):
+# Dashboard: Pages -> wxmini -> Settings -> Environment variables
+#   WX_APP_SECRET = <AppSecret from WeChat MP admin>
+# CLI:
+#   npx wrangler pages secret put WX_APP_SECRET --project-name wxmini
+#
+# Local dev: copy .dev.vars.example to .dev.vars and fill WX_APP_SECRET
 
 [[kv_namespaces]]
 binding = "WXMINI"

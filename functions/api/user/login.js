@@ -1,13 +1,23 @@
 import { createDefaultUser, getNextStreakReward, getTodayInChina, processDailyLogin } from '../../_shared/merit.js';
 import { handleOptions, jsonResponse } from '../../_shared/response.js';
+import { codeToOpenid } from '../../_shared/wechat.js';
 
-function getOpenid(request, body) {
+function getOpenidFromRequest(request, body) {
   if (body?.openid) {
     return body.openid.trim();
   }
 
   const url = new URL(request.url);
   return (url.searchParams.get('openid') || '').trim();
+}
+
+async function resolveOpenid(request, body, env) {
+  if (body?.code) {
+    const session = await codeToOpenid(env, body.code.trim());
+    return session.openid;
+  }
+
+  return getOpenidFromRequest(request, body);
 }
 
 function buildLoginResponse(result) {
@@ -41,9 +51,20 @@ export async function onRequest(context) {
     return optionsResponse;
   }
 
-  const openid = getOpenid(request, request.method === 'POST' ? await request.json().catch(() => ({})) : null);
+  const body = request.method === 'POST' ? await request.json().catch(() => ({})) : null;
+
+  let openid = '';
+  try {
+    openid = await resolveOpenid(request, body, env);
+  } catch (error) {
+    return jsonResponse({
+      ok: false,
+      error: error.message || 'failed to resolve openid',
+    }, 400);
+  }
+
   if (!openid) {
-    return jsonResponse({ ok: false, error: 'openid is required' }, 400);
+    return jsonResponse({ ok: false, error: 'openid or code is required' }, 400);
   }
 
   const existing = await env.WXMINI.get(openid, 'json');
