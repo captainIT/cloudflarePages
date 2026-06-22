@@ -1,5 +1,6 @@
 import { createDefaultUser, getNextStreakReward, getTodayInChina, processDailyLogin } from '../../_shared/merit.js';
 import { handleOptions, jsonResponse } from '../../_shared/response.js';
+import { getUserByOpenid, upsertUser } from '../../_shared/users-db.js';
 import { codeToOpenid } from '../../_shared/wechat.js';
 
 function getOpenidFromRequest(request, body) {
@@ -67,7 +68,11 @@ export async function onRequest(context) {
     return jsonResponse({ ok: false, error: 'openid or code is required' }, 400);
   }
 
-  const existing = await env.WXMINI.get(openid, 'json');
+  if (!env.DB) {
+    return jsonResponse({ ok: false, error: 'database not configured' }, 500);
+  }
+
+  const existing = await getUserByOpenid(env.DB, openid);
   const user = existing || createDefaultUser(openid);
 
   if (request.method === 'GET') {
@@ -83,7 +88,7 @@ export async function onRequest(context) {
   }
 
   const result = processDailyLogin(user);
-  await env.WXMINI.put(openid, JSON.stringify(result.user));
+  await upsertUser(env.DB, result.user);
 
   return jsonResponse(buildLoginResponse(result));
 }

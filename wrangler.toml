@@ -14,6 +14,10 @@ WX_APP_ID = "wxdc70a51cfcca8352"
 #
 # Local dev: copy .dev.vars.example to .dev.vars and fill WX_APP_SECRET
 
-[[kv_namespaces]]
-binding = "WXMINI"
-id = "54f58d0691504c8b99d0097a33e577ea"
+# D1 SQLite database (create via: npx wrangler d1 create wxmini-db)
+# Then bind in Pages dashboard: Settings -> Functions -> D1 database bindings -> DB
+[[d1_databases]]
+binding = "DB"
+database_name = "wxsqlite"
+database_id = "b2e9fb71-4b5e-4c4c-9b81-0f23f147352e"
+migrations_dir = "migrations"

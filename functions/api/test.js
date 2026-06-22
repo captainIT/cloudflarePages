@@ -1,43 +1,54 @@
-const JSON_HEADERS = {
-  'Content-Type': 'application/json; charset=utf-8',
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-};
+import { handleOptions, jsonResponse } from '../_shared/response.js';
 
 export async function onRequest(context) {
   const { request, env } = context;
-
-  if (request.method === 'OPTIONS') {
-    return new Response(null, { status: 204, headers: JSON_HEADERS });
+  const optionsResponse = handleOptions(request);
+  if (optionsResponse) {
+    return optionsResponse;
   }
 
   const url = new URL(request.url);
-  const key = url.searchParams.get('key') || 'test';
 
   if (request.method === 'POST') {
-    const payload = await request.json();
-    await env.WXMINI.put(key, JSON.stringify(payload));
-    return new Response(JSON.stringify({ ok: true, key, saved: payload }), {
-      status: 200,
-      headers: JSON_HEADERS,
-    });
+    const payload = await request.json().catch(() => ({}));
+    const openid = payload.openid || 'test-openid';
+    const now = new Date().toISOString();
+
+    await env.DB
+      .prepare(`
+        INSERT INTO users (
+          openid, total_merit, login_merit, last_login_date,
+          consecutive_days, max_consecutive_days, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(openid) DO UPDATE SET
+          total_merit = excluded.total_merit,
+          updated_at = excluded.updated_at
+      `)
+      .bind(
+        openid,
+        payload.totalMerit ?? 0,
+        payload.loginMerit ?? 0,
+        payload.lastLoginDate ?? null,
+        payload.consecutiveDays ?? 0,
+        payload.maxConsecutiveDays ?? 0,
+        payload.createdAt ?? now,
+        now,
+      )
+      .run();
+
+    return jsonResponse({ ok: true, openid, saved: payload });
   }
 
-  const value = await env.WXMINI.get(key, 'json');
+  const stats = await env.DB
+    .prepare('SELECT COUNT(*) AS userCount FROM users')
+    .first();
 
-  const body = {
+  return jsonResponse({
     ok: true,
-    message: 'this is test',
+    message: 'D1 database test',
     method: request.method,
     path: url.pathname,
-    key,
-    value,
+    userCount: stats?.userCount ?? 0,
     timestamp: new Date().toISOString(),
-  };
-
-  return new Response(JSON.stringify(body), {
-    status: 200,
-    headers: JSON_HEADERS,
   });
 }
