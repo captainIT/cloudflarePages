@@ -1,4 +1,17 @@
 const DAILY_LOGIN_MERIT = 1;
+const DAILY_SHARE_MERIT = 1;
+
+export const MERIT_TYPE = {
+  LOGIN: 'login',
+  LOGIN_STREAK: 'login_streak',
+  SHARE: 'share',
+};
+
+export const MERIT_TYPE_LABELS = {
+  login: '每日登录',
+  login_streak: '连续登录奖励',
+  share: '分享好友',
+};
 
 const STREAK_BONUSES = {
   3: 2,
@@ -28,7 +41,9 @@ export function createDefaultUser(openid) {
     openid,
     totalMerit: 0,
     loginMerit: 0,
+    shareMerit: 0,
     lastLoginDate: null,
+    lastShareDate: null,
     consecutiveDays: 0,
     maxConsecutiveDays: 0,
     createdAt: now,
@@ -48,6 +63,7 @@ export function processDailyLogin(user, today = getTodayInChina()) {
       todayReward: 0,
       dailyMerit: 0,
       streakBonus: 0,
+      events: [],
     };
   }
 
@@ -80,6 +96,68 @@ export function processDailyLogin(user, today = getTodayInChina()) {
     todayReward,
     dailyMerit,
     streakBonus,
+    events: buildLoginMeritEvents(updatedUser, dailyMerit, streakBonus, today),
+  };
+}
+
+export function buildLoginMeritEvents(user, dailyMerit, streakBonus, today) {
+  const now = new Date().toISOString();
+  const events = [];
+
+  if (dailyMerit > 0) {
+    events.push({
+      type: MERIT_TYPE.LOGIN,
+      amount: dailyMerit,
+      description: MERIT_TYPE_LABELS.login,
+      eventDate: today,
+      createdAt: now,
+    });
+  }
+
+  if (streakBonus > 0) {
+    events.push({
+      type: MERIT_TYPE.LOGIN_STREAK,
+      amount: streakBonus,
+      description: `连续登录${user.consecutiveDays}天奖励`,
+      eventDate: today,
+      createdAt: now,
+    });
+  }
+
+  return events;
+}
+
+export function processShareMerit(user, today = getTodayInChina()) {
+  if (user.lastShareDate === today) {
+    return {
+      user,
+      isNewShare: false,
+      todayReward: 0,
+      events: [],
+    };
+  }
+
+  const todayReward = DAILY_SHARE_MERIT;
+  const now = new Date().toISOString();
+  const updatedUser = {
+    ...user,
+    totalMerit: user.totalMerit + todayReward,
+    shareMerit: (user.shareMerit || 0) + todayReward,
+    lastShareDate: today,
+    updatedAt: now,
+  };
+
+  return {
+    user: updatedUser,
+    isNewShare: true,
+    todayReward,
+    events: [{
+      type: MERIT_TYPE.SHARE,
+      amount: todayReward,
+      description: MERIT_TYPE_LABELS.share,
+      eventDate: today,
+      createdAt: now,
+    }],
   };
 }
 

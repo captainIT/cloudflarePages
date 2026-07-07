@@ -1,4 +1,4 @@
-import { createDefaultUser, getNextStreakReward, getTodayInChina, processDailyLogin } from '../../_shared/merit.js';
+import { createDefaultUser, getTodayInChina, processShareMerit } from '../../_shared/merit.js';
 import { resolveOpenid } from '../../_shared/openid.js';
 import { handleOptions, jsonResponse } from '../../_shared/response.js';
 import { getUserByOpenid, insertMeritEvents, upsertUser } from '../../_shared/users-db.js';
@@ -18,21 +18,6 @@ function buildUserPayload(user) {
   };
 }
 
-function buildLoginResponse(result) {
-  const { user, isNewLogin, todayReward, dailyMerit = 0, streakBonus = 0 } = result;
-
-  return {
-    ok: true,
-    isNewLogin,
-    todayReward,
-    dailyMerit,
-    streakBonus,
-    today: getTodayInChina(),
-    nextStreakReward: getNextStreakReward(user.consecutiveDays),
-    user: buildUserPayload(user),
-  };
-}
-
 export async function onRequest(context) {
   const { request, env } = context;
   const optionsResponse = handleOptions(request);
@@ -40,7 +25,11 @@ export async function onRequest(context) {
     return optionsResponse;
   }
 
-  const body = request.method === 'POST' ? await request.json().catch(() => ({})) : null;
+  if (request.method !== 'POST') {
+    return jsonResponse({ ok: false, error: 'method not allowed' }, 405);
+  }
+
+  const body = await request.json().catch(() => ({}));
 
   let openid = '';
   try {
@@ -62,25 +51,18 @@ export async function onRequest(context) {
 
   const existing = await getUserByOpenid(env.DB, openid);
   const user = existing || createDefaultUser(openid);
+  const result = processShareMerit(user);
 
-  if (request.method === 'GET') {
-    return jsonResponse(buildLoginResponse({
-      user,
-      isNewLogin: false,
-      todayReward: 0,
-      events: [],
-    }));
-  }
-
-  if (request.method !== 'POST') {
-    return jsonResponse({ ok: false, error: 'method not allowed' }, 405);
-  }
-
-  const result = processDailyLogin(user);
   await upsertUser(env.DB, result.user);
   if (result.events?.length) {
     await insertMeritEvents(env.DB, openid, result.events);
   }
 
-  return jsonResponse(buildLoginResponse(result));
+  return jsonResponse({
+    ok: true,
+    isNewShare: result.isNewShare,
+    todayReward: result.todayReward,
+    today: getTodayInChina(),
+    user: buildUserPayload(result.user),
+  });
 }
