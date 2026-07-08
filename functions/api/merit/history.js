@@ -70,7 +70,7 @@ export async function onRequest(context) {
 
   const enrichedEvents = events.map((event) => ({
     ...event,
-    label: MERIT_TYPE_LABELS[event.type] || event.description || event.type,
+    label: event.description || MERIT_TYPE_LABELS[event.type] || event.type,
   }));
 
   return jsonResponse({
