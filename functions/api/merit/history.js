@@ -1,35 +1,26 @@
-import { MERIT_TYPE_LABELS } from '../../_shared/merit.js';
 import { getOpenidFromRequest } from '../../_shared/openid.js';
 import { handleOptions, jsonResponse } from '../../_shared/response.js';
-import {
-  countMeritEvents,
-  getMeritEvents,
-  getMeritSummaryByType,
-  getUserByOpenid,
-} from '../../_shared/users-db.js';
+import { getUserByOpenid } from '../../_shared/users-db.js';
 
-const DEFAULT_LIMIT = 20;
-const MAX_LIMIT = 50;
+function buildSummary(user) {
+  const loginMerit = user?.loginMerit || 0;
+  const streakMerit = user?.streakMerit || 0;
+  const shareMerit = user?.shareMerit || 0;
 
-function parsePositiveInt(value, fallback) {
-  const parsed = Number.parseInt(value, 10);
-  if (Number.isNaN(parsed) || parsed < 0) {
-    return fallback;
-  }
-  return parsed;
-}
-
-function buildSummary(user, byType) {
   return {
     totalMerit: user?.totalMerit || 0,
-    loginMerit: user?.loginMerit || 0,
-    shareMerit: user?.shareMerit || 0,
-    byType: Object.entries(byType).map(([type, stats]) => ({
-      type,
-      label: MERIT_TYPE_LABELS[type] || type,
-      count: stats.count,
-      total: stats.total,
-    })),
+    loginMerit,
+    streakMerit,
+    shareMerit,
+    consecutiveDays: user?.consecutiveDays || 0,
+    maxConsecutiveDays: user?.maxConsecutiveDays || 0,
+    lastLoginDate: user?.lastLoginDate || null,
+    lastShareDate: user?.lastShareDate || null,
+    byType: [
+      { type: 'login', label: '每日登录', total: Math.max(loginMerit - streakMerit, 0) },
+      { type: 'login_streak', label: '连续登录奖励', total: streakMerit },
+      { type: 'share', label: '分享好友', total: shareMerit },
+    ],
   };
 }
 
@@ -53,34 +44,10 @@ export async function onRequest(context) {
     return jsonResponse({ ok: false, error: 'database not configured' }, 500);
   }
 
-  const url = new URL(request.url);
-  const limit = Math.min(
-    parsePositiveInt(url.searchParams.get('limit'), DEFAULT_LIMIT) || DEFAULT_LIMIT,
-    MAX_LIMIT,
-  );
-  const offset = parsePositiveInt(url.searchParams.get('offset'), 0);
-  const page = Math.floor(offset / limit) + 1;
-
-  const [user, events, byType, totalCount] = await Promise.all([
-    getUserByOpenid(env.DB, openid),
-    getMeritEvents(env.DB, openid, { limit, offset }),
-    getMeritSummaryByType(env.DB, openid),
-    countMeritEvents(env.DB, openid),
-  ]);
-
-  const enrichedEvents = events.map((event) => ({
-    ...event,
-    label: event.description || MERIT_TYPE_LABELS[event.type] || event.type,
-  }));
+  const user = await getUserByOpenid(env.DB, openid);
 
   return jsonResponse({
     ok: true,
-    summary: buildSummary(user, byType),
-    events: enrichedEvents,
-    page,
-    limit,
-    offset,
-    totalCount,
-    hasMore: offset + events.length < totalCount,
+    summary: buildSummary(user),
   });
 }

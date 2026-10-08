@@ -3,6 +3,7 @@ function rowToUser(row) {
     openid: row.openid,
     totalMerit: row.total_merit,
     loginMerit: row.login_merit,
+    streakMerit: row.streak_merit || 0,
     shareMerit: row.share_merit || 0,
     lastLoginDate: row.last_login_date,
     lastShareDate: row.last_share_date || null,
@@ -10,17 +11,6 @@ function rowToUser(row) {
     maxConsecutiveDays: row.max_consecutive_days,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-  };
-}
-
-function rowToMeritEvent(row) {
-  return {
-    id: row.id,
-    type: row.type,
-    amount: row.amount,
-    description: row.description,
-    eventDate: row.event_date,
-    createdAt: row.created_at,
   };
 }
 
@@ -44,6 +34,7 @@ export async function upsertUser(db, user) {
         openid,
         total_merit,
         login_merit,
+        streak_merit,
         share_merit,
         last_login_date,
         last_share_date,
@@ -51,10 +42,11 @@ export async function upsertUser(db, user) {
         max_consecutive_days,
         created_at,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(openid) DO UPDATE SET
         total_merit = excluded.total_merit,
         login_merit = excluded.login_merit,
+        streak_merit = excluded.streak_merit,
         share_merit = excluded.share_merit,
         last_login_date = excluded.last_login_date,
         last_share_date = excluded.last_share_date,
@@ -66,6 +58,7 @@ export async function upsertUser(db, user) {
       user.openid,
       user.totalMerit,
       user.loginMerit,
+      user.streakMerit || 0,
       user.shareMerit || 0,
       user.lastLoginDate,
       user.lastShareDate || null,
@@ -75,72 +68,4 @@ export async function upsertUser(db, user) {
       user.updatedAt,
     )
     .run();
-}
-
-export async function insertMeritEvents(db, openid, events) {
-  if (!events.length) {
-    return;
-  }
-
-  const stmt = db.prepare(`
-    INSERT INTO merit_events (openid, type, amount, description, event_date, created_at)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `);
-
-  const batch = events.map((event) => stmt.bind(
-    openid,
-    event.type,
-    event.amount,
-    event.description,
-    event.eventDate,
-    event.createdAt,
-  ));
-
-  await db.batch(batch);
-}
-
-export async function getMeritEvents(db, openid, { limit = 20, offset = 0 } = {}) {
-  const rows = await db
-    .prepare(`
-      SELECT id, type, amount, description, event_date, created_at
-      FROM merit_events
-      WHERE openid = ?
-      ORDER BY created_at DESC, id DESC
-      LIMIT ? OFFSET ?
-    `)
-    .bind(openid, limit, offset)
-    .all();
-
-  return (rows.results || []).map(rowToMeritEvent);
-}
-
-export async function getMeritSummaryByType(db, openid) {
-  const rows = await db
-    .prepare(`
-      SELECT type, COUNT(*) AS count, COALESCE(SUM(amount), 0) AS total
-      FROM merit_events
-      WHERE openid = ?
-      GROUP BY type
-    `)
-    .bind(openid)
-    .all();
-
-  const byType = {};
-  for (const row of rows.results || []) {
-    byType[row.type] = {
-      count: row.count,
-      total: row.total,
-    };
-  }
-
-  return byType;
-}
-
-export async function countMeritEvents(db, openid) {
-  const row = await db
-    .prepare('SELECT COUNT(*) AS count FROM merit_events WHERE openid = ?')
-    .bind(openid)
-    .first();
-
-  return row?.count || 0;
 }

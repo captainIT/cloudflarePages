@@ -1,13 +1,14 @@
 import { createDefaultUser, getTodayInChina, processShareMerit } from '../../_shared/merit.js';
 import { resolveOpenid } from '../../_shared/openid.js';
 import { handleOptions, jsonResponse } from '../../_shared/response.js';
-import { getUserByOpenid, insertMeritEvents, upsertUser } from '../../_shared/users-db.js';
+import { getUserByOpenid, upsertUser } from '../../_shared/users-db.js';
 
 function buildUserPayload(user) {
   return {
     openid: user.openid,
     totalMerit: user.totalMerit,
     loginMerit: user.loginMerit,
+    streakMerit: user.streakMerit || 0,
     shareMerit: user.shareMerit || 0,
     lastLoginDate: user.lastLoginDate,
     lastShareDate: user.lastShareDate || null,
@@ -53,9 +54,8 @@ export async function onRequest(context) {
   const user = existing || createDefaultUser(openid);
   const result = processShareMerit(user);
 
-  await upsertUser(env.DB, result.user);
-  if (result.events?.length) {
-    await insertMeritEvents(env.DB, openid, result.events);
+  if (result.isNewShare) {
+    await upsertUser(env.DB, result.user);
   }
 
   return jsonResponse({
